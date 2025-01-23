@@ -52,7 +52,7 @@ test('pytest', import('python').find_installation('python3')
 	, workdir: meson.current_source_dir()
 )
 
-foreach f : ['ws.rst', 'curl.rst']
+foreach f : ['ws.rst', 'curl.rst', 'uws.rst']
 	custom_target('channel-man-@0@'.format(f)
 		, input: 'doc' / f
 		, output : 'tll-channel-@BASENAME@.7'
