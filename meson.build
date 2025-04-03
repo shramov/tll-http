@@ -52,9 +52,9 @@ test('pytest', import('python').find_installation('python3')
 	, workdir: meson.current_source_dir()
 )
 
-foreach f : ['doc/ws.rst']
+foreach f : ['ws.rst', 'curl.rst']
 	custom_target('channel-man-@0@'.format(f)
-		, input: f
+		, input: 'doc' / f
 		, output : 'tll-channel-@BASENAME@.7'
 		, command : [rst2man, '@INPUT@', '@OUTPUT@']
 		, install_dir: get_option('mandir') / 'man7'
