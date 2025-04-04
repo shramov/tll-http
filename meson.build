@@ -61,3 +61,11 @@ foreach f : ['ws.rst', 'curl.rst', 'uws.rst']
 		, install: true
 	)
 endforeach
+
+custom_target('man-http'
+        , input: 'doc/http.rst'
+        , output : 'tll-http.7'
+        , command : [rst2man, '@INPUT@', '@OUTPUT@']
+        , install_dir: get_option('mandir') / 'man7'
+        , install: true
+)
