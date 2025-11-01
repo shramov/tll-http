@@ -1,3 +1,17 @@
+tll-http (0.3.0) unstable; urgency=medium
+
+  * doc: Describe prefix paths for uws
+  * http: Install http control scheme
+  * lws: Return UNKNOWN for unknown enum values
+  * uwsc:
+    Clear client pointer on close
+    Export local and remote address
+    Fix invalid logger pointer conversion
+    Report ping-pong RTT
+    Use local libuwsc fork
+
+ -- Pavel Shramov <shramov@mexmat.net>  Sat, 01 Nov 2025 10:55:43 +0300
+
 tll-http (0.2.0) unstable; urgency=medium
 
   * uws:
