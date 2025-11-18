@@ -7,6 +7,7 @@
 
 #include <tll/channel/base.h>
 #include <tll/channel/module.h>
+#include <tll/util/scoped_fd.h>
 #include <tll/util/sockaddr.h>
 #include <tll/util/time.h>
 
@@ -24,7 +25,7 @@ using namespace std::chrono_literals;
 
 class WSClient : public tll::channel::Base<WSClient>
 {
-	int _timerfd = -1;
+	tll::util::ScopedFd _timerfd { -1 };
 	int _ws_op = UWSC_OP_BINARY;
 
 	struct uwsc_client * _client = nullptr;
@@ -108,7 +109,7 @@ int WSClient::_open(const tll::ConstConfig &url)
 	for (auto & [h, v] : headers)
 		hstring += fmt::format("{}: {}\r\n", h, v);
 
-	auto _timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+	_timerfd.reset(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC));
 	if (_timerfd == -1)
 		return _log.fail(EINVAL, "Failed to create timer fd: {}", strerror(errno));
 
@@ -171,13 +172,11 @@ int WSClient::_close()
 	}
 	_client = nullptr;
 
-	if (_timerfd != -1)
-		::close(_timerfd);
-	_timerfd = -1;
-
 	if (_ev_loop)
 		ev_loop_destroy(_ev_loop);
 	_ev_loop = nullptr;
+
+	_timerfd.reset();
 
 	return 0;
 }
