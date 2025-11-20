@@ -26,6 +26,7 @@ usockets_lib = static_library('usockets',
 
 usockets = declare_dependency(include_directories: usockets_include, link_with: usockets_lib, dependencies: [libuv, zlib])
 uwebsockets = declare_dependency(include_directories: include_directories('uwebsockets/src'), dependencies: [usockets])
+echo_server = executable('ws-echo-server', 'uwebsockets/examples/EchoServer.cpp', dependencies: [uwebsockets])
 
 libuwsc_src = files(
 	'libuwsc/src/sha1.c',
