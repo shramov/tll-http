@@ -46,6 +46,8 @@ curl = shared_library('tll-curl',
 		install : true
 )
 
+executable('bench-getrandom', 'bench/random.cc', dependencies: [fmt, tll, openssl])
+
 install_data(['src/http.yaml'], install_dir: get_option('datadir') / 'tll/scheme/tll/')
 
 test('pytest', import('python').find_installation('python3')
