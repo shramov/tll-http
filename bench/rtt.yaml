@@ -1,0 +1,30 @@
+logger:
+  type: spdlog
+  async: yes
+  levels:
+    tll.processor: INFO
+
+processor.module:
+  - { module: build/tll-uwsc }
+  - { module: tll-logic-stat }
+  - { module: tll-logic-rtt }
+
+processor.objects:
+  stat:
+    worker: stat
+    url: stat://
+    channels.timer: stat-timer
+  stat-timer:
+    url: timer://;interval=1s;stat=no
+    depends: stat
+    worker: stat
+  ws.init: ws://localhost:9001;stat=yes;shutdown-on=error
+  timer:
+    init: timer://;interval=10ms
+    depends: rtt, ws
+  rtt:
+    init: rtt://;stat=yes
+    channels:
+      input: ws
+      output: ws
+      timer: timer
