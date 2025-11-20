@@ -16,6 +16,9 @@ lws = dependency('libwebsockets', required: get_option('with_lws'), disabler: tr
 libev = meson.get_compiler('c').find_library('ev', required: get_option('with_lws'), disabler: true)
 rst2man = find_program('rst2man', disabler: true, required: false)
 
+libev_lib = static_library('libev-tll', 'src/ev.cc', dependencies: [fmt, tll])
+libev_tll = declare_dependency(include_directories: ['src', 'src/tll-ev'], link_with: libev_lib)
+
 lib = shared_library('tll-ws',
 		['src/channel.cc', 'src/names.cc', 'src/ev-backend.c'],
 		include_directories : include,
