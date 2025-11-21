@@ -38,7 +38,7 @@ uws = shared_library('tll-uws',
 uwsc = shared_library('tll-uwsc',
 		['src/uwsc.cc', 'src/ev-backend.c'],
 		include_directories : include,
-		dependencies : [fmt, tll, libuwsc, libev],
+		dependencies : [fmt, tll, libuwsc, libev_tll],
 		install : true
 )
 

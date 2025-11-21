@@ -13,19 +13,17 @@
 
 #include "uwsc.h"
 #include "log.h"
-#include "ev-backend.h"
+#include "tll-ev.h"
 #include "uwsc-scheme.h"
 
 #include <chrono>
 
-#include <sys/timerfd.h>
 #include <unistd.h>
 
 using namespace std::chrono_literals;
 
 class WSClient : public tll::channel::Base<WSClient>
 {
-	tll::util::ScopedFd _timerfd { -1 };
 	int _ws_op = UWSC_OP_BINARY;
 
 	struct uwsc_client * _client = nullptr;
@@ -43,7 +41,9 @@ class WSClient : public tll::channel::Base<WSClient>
 
 public:
 	static constexpr std::string_view channel_protocol() { return "ws"; }
+	static constexpr auto child_policy() { return ChildPolicy::Many; }
 	static constexpr auto open_policy() { return OpenPolicy::Manual; }
+	static constexpr auto process_policy() { return ProcessPolicy::Never; }
 	static constexpr auto scheme_control_string() { return uwsc_scheme::scheme_string; }
 
 	int _init(const tll::Channel::Url &, tll::Channel *master);
@@ -55,8 +55,8 @@ public:
 	int _open(const tll::ConstConfig &);
 	int _close();
 
-	int _process(long timeout, int flags);
 	int _post(const tll_msg_t *msg, int flags);
+	int _process(long timeout, int flags);
 
 private:
 	void _on_open(uwsc_client *c);
@@ -109,32 +109,9 @@ int WSClient::_open(const tll::ConstConfig &url)
 	for (auto & [h, v] : headers)
 		hstring += fmt::format("{}: {}\r\n", h, v);
 
-	_timerfd.reset(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC));
-	if (_timerfd == -1)
-		return _log.fail(EINVAL, "Failed to create timer fd: {}", strerror(errno));
-
-	_ev_loop = ev_loop_new(EVFLAG_NOENV | EVFLAG_NOSIGMASK);
+	_ev_loop = tll_ev_loop_new(&internal);
 	if (!_ev_loop)
 		return _log.fail(EINVAL, "Faield to init libev event loop");
-
-	ev_io_init(&_ev_timer,
-		[](struct ev_loop *, ev_io *ev, int)
-		{
-			int64_t buf;
-			auto r = read(ev->fd, &buf, sizeof(buf));
-			(void) r;
-		},
-		_timerfd,
-		EV_READ);
-	ev_io_start(_ev_loop, &_ev_timer);
-
-	ev_run(_ev_loop, EVRUN_NOWAIT);
-
-	struct itimerspec its = {};
-	its.it_interval = { 0, 10000000 };
-	its.it_value = { 0, 1 };
-	if (timerfd_settime(_timerfd, 0, &its, nullptr))
-		return _log.fail(EINVAL, "Failed to rearm timerfd: {}", strerror(errno));
 
 	_client = uwsc_new(_ev_loop, _url.c_str(), _ping_interval.count(), hstring.size() ? hstring.c_str() : nullptr);
 	if (!_client)
@@ -149,13 +126,6 @@ int WSClient::_open(const tll::ConstConfig &url)
 		_client->ping = [](uwsc_client *c) { static_cast<WSClient *>(c->ext)->_ping(c); };
 		_client->onping = [](uwsc_client *c) { static_cast<WSClient *>(c->ext)->_on_control(c, UWSC_OP_PING); };
 		_client->onpong = [](uwsc_client *c) { static_cast<WSClient *>(c->ext)->_on_control(c, UWSC_OP_PONG); };
-	}
-
-	auto fd = tll_ev_backend_fd(_ev_loop);
-
-	if (fd != -1) {
-		_update_fd(fd);
-		_update_dcaps(dcaps::CPOLLIN);
 	}
 
 	return 0;
@@ -176,8 +146,6 @@ int WSClient::_close()
 		ev_loop_destroy(_ev_loop);
 	_ev_loop = nullptr;
 
-	_timerfd.reset();
-
 	return 0;
 }
 
@@ -191,15 +159,9 @@ int WSClient::_post(const tll_msg_t *msg, int flags)
 
 int WSClient::_process(long timeout, int flags)
 {
-	_log.trace("Process");
-	if (state() == tll::state::Closing) {
+	if (state() == tll::state::Closing)
 		close(true);
-		return 0;
-	}
 
-	auto r = ev_run(_ev_loop, EVRUN_NOWAIT);
-	if (r < 0)
-		return _log.fail(EINVAL, "ev_run failed: {}", r);
 	return 0;
 }
 
@@ -252,7 +214,7 @@ void WSClient::_on_close(uwsc_client *cl, int code, const char * reason)
 	_log.info("Connection closed: {} {}", code, reason);
 	_client = nullptr;
 	state(tll::state::Closing);
-	_dcaps_pending(true);
+	_update_dcaps(dcaps::Process | dcaps::Pending);
 }
 
 void WSClient::_on_message(uwsc_client *c, void *data, size_t len, bool binary)

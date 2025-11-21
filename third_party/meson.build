@@ -42,7 +42,7 @@ libuwsc_lib = static_library('uwsc',
 	libuwsc_src,
 	include_directories: libuwsc_include,
 	c_args: ['-D_GNU_SOURCE', '-Wno-strict-aliasing'],
-	dependencies: [libev, openssl, tll],
+	dependencies: [libev_tll, openssl, tll],
 	install: false
 )
 libuwsc = declare_dependency(include_directories: libuwsc_include, link_with: libuwsc_lib, dependencies: [libev, openssl, tll])
