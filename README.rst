@@ -28,7 +28,7 @@ Compilation is straightforward::
 .. _TLL: https://github.com/shramov/tll/
 .. _cURL: https://curl.se/
 .. _libuwsc: https://github.com/zhaojh329/libuwsc
-.. _meson: https://mesonbuild.com/ 
+.. _meson: https://mesonbuild.com/
 .. _uWebSockets: https://github.com/uNetworking/uWebSockets
 
 ..
