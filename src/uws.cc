@@ -13,6 +13,7 @@
 #include "tll/channel/module.h"
 #include "tll/util/cppring.h"
 #include "tll/util/size.h"
+#include "tll/util/sockaddr.h"
 
 #include "http-scheme-binder.h"
 #include "http-status.h"
@@ -49,6 +50,8 @@ class WSServer : public tll::channel::Base<WSServer>
 	std::string _host;
 	unsigned short _port;
 	size_t _max_payload_size = 16 * 1024;
+	size_t _sndbuf = 0;
+	size_t _rcvbuf = 0;
 
  public:
 	uWS::OpCode default_op_code = uWS::OpCode::BINARY;
@@ -384,6 +387,8 @@ int WSServer::_init(const Channel::Url &url, Channel * master)
 	auto reader = channel_props_reader(url);
 	default_op_code = reader.getT("binary", true) ? uWS::OpCode::BINARY : uWS::OpCode::TEXT;
 	_max_payload_size = reader.getT<tll::util::Size>("max-payload-size", _max_payload_size);
+	_sndbuf = reader.getT("sndbuf", tll::util::Size { 0 });
+	_rcvbuf = reader.getT("rcvbuf", tll::util::Size { 0 });
 	/*
 	_table = reader.getT<std::string>("table");
 	if ((internal.caps & (caps::Input | caps::Output)) == caps::Input)
@@ -625,6 +630,13 @@ void WSServer::_ws_upgrade(uWS::HttpResponse<false> * resp, uWS::HttpRequest *re
 	}
 
 	std::variant<WSWS *, WSPub *> channel;
+
+	auto fd = (int) (uintptr_t) resp->getNativeHandle();
+	if (_sndbuf && tll::network::setsockoptT<int>(fd, SOL_SOCKET, SO_SNDBUF, _sndbuf))
+		this->_log.warning("Failed to set sndbuf to {}: {}", _sndbuf, strerror(errno));
+
+	if (_rcvbuf && tll::network::setsockoptT<int>(fd, SOL_SOCKET, SO_RCVBUF, _rcvbuf))
+		this->_log.warning("Failed to set rcvbuf to {}: {}", _rcvbuf, strerror(errno));
 
 	if (std::holds_alternative<WSHTTP *>(*node)) {
 		_log.debug("WS request to HTTP endpoint {}", uri);
