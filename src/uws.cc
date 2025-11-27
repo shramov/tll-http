@@ -30,6 +30,7 @@ struct User {
 	std::variant<WSWS *, WSPub *> channel;
 	tll::util::DataRing<void>::iterator position; // For pub nodes
 	tll_addr_t addr;
+	std::string path;
 };
 
 using WebSocket = uWS::WebSocket<false, true, User>;
@@ -668,7 +669,7 @@ void WSServer::_ws_upgrade(uWS::HttpResponse<false> * resp, uWS::HttpRequest *re
 		channel = std::get<WSPub *>(*node);
 	}
 
-	resp->template upgrade<User>({ channel }
+	resp->template upgrade<User>({ .channel = channel, .path = std::string(req->getFullUrl()) }
 		, req->getHeader("sec-websocket-key")
 		, req->getHeader("sec-websocket-protocol")
 		, req->getHeader("sec-websocket-extensions")
@@ -679,7 +680,7 @@ void WSServer::_ws_upgrade(uWS::HttpResponse<false> * resp, uWS::HttpRequest *re
 void WSServer::_ws_open(WebSocket *ws)
 {
 	auto user = ws->getUserData();
-	std::visit([&ws, &user](auto && c) { c->_connected(ws, "", &user->addr); }, user->channel);
+	std::visit([&ws, &user](auto && c) { c->_connected(ws, user->path, &user->addr); }, user->channel);
 }
 
 void WSServer::_ws_message(WebSocket *ws, std::string_view message, uWS::OpCode)

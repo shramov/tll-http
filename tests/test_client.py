@@ -73,6 +73,7 @@ async def test(asyncloop, server, client, port):
     assert m.type == m.Type.Control
     m = sub.unpack(m)
     assert m.SCHEME.name == 'Connect'
+    assert m.path == '/path'
 
     client.post(b'xxx')
     client.post(b'yyy')
