@@ -193,6 +193,8 @@ class WSNode : public tll::channel::Base<T>
 	int _connected(R * resp, std::string_view url, tll_addr_t * addr, Method method = Method::UNDEFINED);
 	int _disconnected(R * resp, tll_addr_t addr);
 
+	void writeable(R * ws, User * user) {}
+
  protected:
 	tll_addr_t _next_addr()
 	{
@@ -245,7 +247,15 @@ class WSWS : public WSNode<WSWS, WebSocket>
 
 	int _post_data(Response * resp, const tll_msg_t *msg, int flags)
 	{
-		resp->send(std::string_view((const char *) msg->data, msg->size), _op_code);
+		auto r = resp->send(std::string_view((const char *) msg->data, msg->size), _op_code);
+		if (r == WebSocket::DROPPED)
+			return _log.fail(EAGAIN, "Message dropped");
+		if (r == WebSocket::BACKPRESSURE) {
+			tll_msg_t m = { TLL_MESSAGE_CONTROL };
+			m.msgid = ws_scheme::WriteFull::meta_id();
+			m.addr = msg->addr;
+			_callback(&m);
+		}
 		return 0;
 	}
 
@@ -256,6 +266,16 @@ class WSWS : public WSNode<WSWS, WebSocket>
 		resp->end();
 		_disconnected(nullptr, msg->addr);
 		return 0;
+	}
+
+	void writeable(Response * ws, User * user)
+	{
+		tll_msg_t m = {
+			.type = TLL_MESSAGE_CONTROL,
+			.msgid = ws_scheme::WriteReady::meta_id(),
+			.addr = user->addr
+		};
+		_callback(&m);
 	}
 };
 
@@ -679,9 +699,7 @@ void WSServer::_ws_message(WebSocket *ws, std::string_view message, uWS::OpCode)
 void WSServer::_ws_drain(WebSocket *ws)
 {
 	auto user = ws->getUserData();
-
-	if (std::holds_alternative<WSPub *>(user->channel))
-		return std::get<WSPub *>(user->channel)->writeable(ws, user);
+	std::visit([ws, user](auto && c) { c->writeable(ws, user); }, user->channel);
 }
 
 void WSServer::_ws_close(WebSocket *ws, int code, std::string_view message)
