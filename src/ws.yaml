@@ -1,0 +1,8 @@
+- options.cpp-namespace: ws_scheme
+  import.http: yaml://./http.yaml
+
+- name: WriteFull
+  id: 30
+
+- name: WriteReady
+  id: 40

@@ -15,12 +15,12 @@
 #include "tll/util/size.h"
 #include "tll/util/sockaddr.h"
 
-#include "http-scheme-binder.h"
+#include "ws-scheme.h"
 #include "http-status.h"
 #include "uws-epoll.h"
 
 using namespace tll;
-using Method = http_scheme::Method;
+using Method = ws_scheme::Method;
 
 class WSHTTP;
 class WSWS;
@@ -170,7 +170,7 @@ class WSNode : public tll::channel::Base<T>
 
 	int _post_control(R * resp, const tll_msg_t *msg, int flags)
 	{
-		if (msg->msgid != http_scheme::Disconnect::meta_id())
+		if (msg->msgid != ws_scheme::Disconnect::meta_id())
 			return 0;
 		_disconnected(resp, msg->addr);
 		resp->end();
@@ -208,9 +208,9 @@ class WSHTTP : public WSNode<WSHTTP>
 	int _post_control(uWS::HttpResponse<false> * resp, const tll_msg_t *msg, int flags)
 	{
 		switch (msg->msgid) {
-		case http_scheme::Connect::meta_id():
+		case ws_scheme::Connect::meta_id():
 			return _post_connect(resp, msg);
-		case http_scheme::Disconnect::meta_id():
+		case ws_scheme::Disconnect::meta_id():
 			resp->end();
 			_disconnected(nullptr, msg->addr);
 			break;
@@ -223,7 +223,7 @@ class WSHTTP : public WSNode<WSHTTP>
 
 	int _post_connect(uWS::HttpResponse<false> * resp, const tll_msg_t *msg)
 	{
-		auto data = http_scheme::Connect::bind(*msg);
+		auto data = ws_scheme::Connect::bind(*msg);
 		if (msg->size < data.meta_size())
 			return _log.fail(EMSGSIZE, "Connect size too small: {} < minimum {}", msg->size, data.meta_size());
 		if (auto status = http_status_string(data.get_code() != 0 ? data.get_code() : 200); status != "")
@@ -251,7 +251,7 @@ class WSWS : public WSNode<WSWS, WebSocket>
 
 	int _post_control(Response * resp, const tll_msg_t *msg, int flags)
 	{
-		if (msg->msgid != http_scheme::Disconnect::meta_id())
+		if (msg->msgid != ws_scheme::Disconnect::meta_id())
 			return 0;
 		resp->end();
 		_disconnected(nullptr, msg->addr);
@@ -324,7 +324,7 @@ class WSPub : public WSNode<WSPub, WebSocket>
 
 	int _post_control(Response * resp, const tll_msg_t *msg, int flags)
 	{
-		if (msg->msgid != http_scheme::Disconnect::meta_id())
+		if (msg->msgid != ws_scheme::Disconnect::meta_id())
 			return 0;
 		resp->end();
 		_disconnected(nullptr, msg->addr);
@@ -369,7 +369,7 @@ int WSServer::_init(const Channel::Url &url, Channel * master)
 	if (_instance)
 		return _log.fail(EINVAL, "Only one UWS server per thread, blocked by existing: '{}'", _instance->name);
 
-	_scheme_control.reset(context().scheme_load(http_scheme::scheme_string));
+	_scheme_control.reset(context().scheme_load(ws_scheme::scheme_string));
 	if (!_scheme_control.get())
 		return _log.fail(EINVAL, "Failed to load control scheme");
 
@@ -531,7 +531,7 @@ template <typename T, typename R>
 int WSNode<T, R>::_connected(R * resp, std::string_view uri, tll_addr_t * addr, Method method)
 {
 	std::vector<unsigned char> buf;
-	auto data = http_scheme::Connect::bind(buf);
+	auto data = ws_scheme::Connect::bind(buf);
 	buf.resize(data.meta_size());
 
 	data.set_path(uri);
@@ -560,7 +560,7 @@ int WSNode<T, R>::_disconnected(R * resp, tll_addr_t addr)
 	}
 
 	std::vector<char> buf;
-	auto data = http_scheme::Disconnect::bind(buf);
+	auto data = ws_scheme::Disconnect::bind(buf);
 	buf.resize(data.meta_size());
 
 	tll_msg_t msg = {};
