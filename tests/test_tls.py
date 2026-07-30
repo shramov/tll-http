@@ -27,26 +27,29 @@ def asyncloop(context):
 def port():
     return ports.TCP4
 
-@pytest.fixture
-def context():
+@pytest.fixture(params=['uwsc', 'wslay'])
+def context(request) -> Context:
     ctx = Context()
+    if request.param == 'wslay':
+        try:
+            ctx.load("tll-tls")
+        except:
+            pytest.skip(f'tll-tls channel not available')
     try:
-        ctx.load(os.path.join(os.environ.get("BUILD_DIR", "build"), "tll-uwsc"))
+        ctx.load(os.path.join(os.environ.get("BUILD_DIR", "build"), f"tll-{request.param}"))
     except:
-        pytest.skip("ws:// channel not available")
+        pytest.skip(f"{request.param} channel not available")
     return ctx
 
 @pytest.fixture
 def ssl_context():
-    if int(websockets.version.version.split('.')[0]) < 10:
-        pytest.skip(f"Websockets module version too old: {websockets.version.version}, need at least 10.0")
     r = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     r.load_cert_chain('cert/server.pem', keyfile='cert/server.key')
     return r
 
 @asyncloop_run
-async def test(asyncloop, port, ssl_context):
-    async with websockets.serve(echo, "*", port, ssl=ssl_context) as server:
+async def test(asyncloop, wsserve, port, ssl_context):
+    async with wsserve(echo, "*", port, ssl=ssl_context) as server:
         client = asyncloop.Channel(f"wss://127.0.0.1:{port}", name='client', dump='yes', ca='cert/ca.pem');
         try:
             client.open()
