@@ -8,6 +8,7 @@
 
 #include <wslay/wslay.h>
 #include "uwsc-scheme.h"
+#include "http.h"
 
 #include <chrono>
 
@@ -301,11 +302,12 @@ ssize_t WSLay::_on_send(wslay_event_context * ctx, const uint8_t *buf, size_t le
 		return len;
 }
 
+static constexpr std::string_view ws_fixed_request = "AAAAAAAAAAAAAAAAAAAAAA==";
+static constexpr std::string_view ws_fixed_response = "ICX+Yqv66kxgM0FcWaLWlFLwTAI=";
+
 int WSLay::_on_active()
 {
 	using namespace std::literals::string_view_literals;
-	std::string key = "AAAAAAAAAAAAAAAAAAAAAA==";
-	std::string keyresp = "mMUdnrWkqg9evVAwThfwMU3nxG0=";
 
 #if FMT_VERSION < 80000
 	struct memory_buffer : public fmt::memory_buffer
@@ -332,7 +334,7 @@ int WSLay::_on_active()
 		"Connection: Upgrade\r\n"
 		"Sec-WebSocket-Key: {}\r\n"
 		"Sec-WebSocket-Version: 13\r\n",
-		host, key);
+		host, ws_fixed_request);
 	if (_headers_str.size())
 		buf.append(_headers_str);
 	buf.append("\r\n"sv);
@@ -346,18 +348,40 @@ int WSLay::_handshake(const tll_msg_t * msg)
 {
 	// TODO: Handle fragmented response
 	std::string_view data { (const char*) msg->data, msg->size };
-	constexpr std::string_view expect = "HTTP/1.1 101";
-	auto sep = data.find("\r\n\r\n");
-	if (sep == data.npos)
-		return state_fail(EINVAL, "Data without end marker");
-	auto reply = data.substr(0, sep);
-	if (reply.substr(0, expect.size()) != expect)
-		return state_fail(EINVAL, "Invalid reply: {}", reply);
+	struct Headers
+	{
+		std::string_view upgrade;
+		std::string_view connection;
+		std::string_view sec_ws_accept;
+
+		int operator ()(std::string_view header, std::string_view value)
+		{
+			if (tll::http::svcasecmp(header, "Upgrade"))
+				upgrade = value;
+			else if (tll::http::svcasecmp(header, "Connection"))
+				connection = value;
+			else if (tll::http::svcasecmp(header, "Sec-WebSocket-Accept"))
+				sec_ws_accept = value;
+			return 0;
+		}
+	} headers;
+	auto resp = tll::http::Reply::parse(data, headers);
+	if (!resp)
+		return state_fail(EINVAL, "Failed to parse HTTP response: {}", resp.error());
+	if (resp->code != "101")
+		return state_fail(EINVAL, "Invalid reply code '{}', expected 101", resp->code);
+	if (!tll::http::svcasecmp(headers.connection, "upgrade"))
+		return state_fail(EINVAL, "Invalid Connection header '{}', expected upgrade", headers.connection);
+	if (!tll::http::svcasecmp(headers.upgrade, "websocket"))
+		return state_fail(EINVAL, "Invalid Upgrade header '{}', expected websocket", headers.upgrade);
+	// XXX: Calculate Sec-WebSocket-Accept header
+	if (headers.sec_ws_accept != ws_fixed_response)
+		return state_fail(EINVAL, "Invalid Sec-WebSocket-Accept header '{}', expected {}", headers.sec_ws_accept, ws_fixed_response);
 	_log.info("Connection established");
 	if (_timer)
 		_timer->open();
 	state(tll::state::Active);
-	return _on_recv_buf(data.substr(sep + 4));
+	return _on_recv_buf(resp->body);
 }
 
 int WSLay::_on_data(const tll_msg_t * msg)
