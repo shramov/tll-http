@@ -20,6 +20,7 @@ class WSLay : public tll::channel::Prefix<WSLay>
 {
 	using Base = tll::channel::Prefix<WSLay>;
 
+	tll_msg_t _msg = { .type = TLL_MESSAGE_DATA };
 	uint8_t _ws_op = WSLAY_BINARY_FRAME;
 
 	struct wslay_event_context * _client = nullptr;
@@ -235,12 +236,12 @@ void WSLay::_on_ws_close(int code, std::string_view reason)
 
 void WSLay::_on_ws_message(const wslay_event_on_msg_recv_arg *arg)
 {
-	tll_msg_t msg = {};
 	switch (arg->opcode) {
 	case WSLAY_BINARY_FRAME:
 	case WSLAY_TEXT_FRAME:
-		msg = { .type = TLL_MESSAGE_DATA, .data = arg->msg, .size = arg->msg_length };
-		_callback_data(&msg);
+		_msg.data = arg->msg;
+		_msg.size = arg->msg_length;
+		_callback_data(&_msg);
 		break;
 	case WSLAY_PING:
 	case WSLAY_PONG:
@@ -359,6 +360,7 @@ int WSLay::_handshake(const tll_msg_t * msg)
 
 int WSLay::_on_data(const tll_msg_t * msg)
 {
+	_msg.time = msg->time;
 	if (state() == tll::state::Opening)
 		return _handshake(msg);
 	return _on_recv_buf({ (const char *) msg->data, msg->size });
