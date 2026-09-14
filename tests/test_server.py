@@ -24,7 +24,7 @@ def context():
 def server(asyncloop, port):
     c = asyncloop.Channel(f'uws://127.0.0.1:{port}', name='server')
     yield c
-    c.close()
+    c.free()
 
 @pytest.fixture
 def asyncloop(context):
