@@ -43,6 +43,8 @@ public:
 	static constexpr auto process_policy() { return ProcessPolicy::Never; }
 	static constexpr auto scheme_control_string() { return uwsc_scheme::scheme_string; }
 	static constexpr auto prefix_active_policy() { return Base::PrefixActivePolicy::Manual; }
+	static constexpr auto post_opening_policy() { return Base::PostPolicy::Disable; }
+	static constexpr auto post_closing_policy() { return Base::PostPolicy::Disable; }
 
 	int _init(const tll::Channel::Url &, tll::Channel *master);
 	int _open(const tll::ConstConfig &);
