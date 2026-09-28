@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # vim: sts=4 sw=4 et
 
+import asyncio
 import decorator
 import os
 import pytest
+import websockets
 
-from tll import asynctll
+from tll.asynctll import asyncio as asynctll
 from tll.channel import Context
 from tll.test_util import ports
 
@@ -178,3 +180,48 @@ async def test_ping_interval(asyncloop, port):
 
     m = await client.recv(0.1)
     assert (m.type, m.msgid) == (m.Type.Control, client.scheme_control['Pong'].msgid)
+
+class Echo:
+    def __init__(self):
+        self.headers = {}
+        self.request = asyncio.get_running_loop().create_future()
+
+    async def __call__(self, sock):
+        self.request.set_result(getattr(sock, 'request', None))
+        async for message in sock:
+            await sock.send(message)
+
+@asyncloop_run
+async def test_python(asyncloop, wsserve, client, port):
+    echo = Echo()
+    async with wsserve(echo, '*', port):
+        try:
+            client.open(**{'header.X-A': 'Aa'})
+
+            assert await client.recv_state() == client.State.Active
+            assert client.state == client.State.Active
+
+            client.post(b'xxx')
+            client.post(b'yyy')
+
+            req = await asyncio.wait_for(echo.request, 0.1)
+            if req is not None:
+                assert req.path == '/path'
+                assert {k: v for k, v in req.headers.items() if k not in ('host', 'sec-websocket-key')} == {
+                        'connection': 'Upgrade',
+                        'sec-websocket-version': '13',
+                        'upgrade': 'websocket',
+                        'x-a': 'Aa',
+                        'x-b': 'b',
+                        }
+            else:
+                # Request appeared somewhere between major versions 10 and 15
+                assert int(websockets.version.version.split('.', 1)[0]) < 15
+
+            m = await client.recv(0.1)
+            assert m.data.tobytes() == b'xxx'
+
+            m = await client.recv(0.1)
+            assert m.data.tobytes() == b'yyy'
+        finally:
+            client.close()
