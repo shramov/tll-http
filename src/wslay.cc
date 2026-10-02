@@ -401,6 +401,9 @@ int WSLay::_on_recv_buf(std::string_view data)
 	_buf = {};
 	if (r)
 		return _log.fail(EINVAL, "wslay_event_recv failed: {}", r);
+	// wslay_event_want_write performs same check as in the loop of wslay_event_send
+	if (auto r = wslay_event_send(_client); r)
+		return state_fail(EINVAL, "wslay_event_send failed: {}", r);
 	return 0;
 }
 
