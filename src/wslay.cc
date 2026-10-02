@@ -250,7 +250,8 @@ void WSLay::_on_ws_message(const wslay_event_on_msg_recv_arg *arg)
 	case WSLAY_PONG:
 		return _on_ws_control(arg->opcode);
 	case WSLAY_CONNECTION_CLOSE:
-		return _on_ws_close(arg->status_code, {(const char *) arg->msg, arg->msg_length });
+		// Status code in first 2 bytes of the message
+		return _on_ws_close(arg->status_code, {(const char *) arg->msg + 2, std::max<size_t>(arg->msg_length, 2) - 2});
 	}
 }
 
