@@ -1,3 +1,9 @@
+tll-http (0.5.0) unstable; urgency=medium
+
+  * wslay: Websocket client implementation based on wslay library
+
+ -- Pavel Shramov <shramov@mexmat.net>  Mon, 05 Oct 2026 16:25:29 +0300
+
 tll-http (0.4.1) unstable; urgency=medium
 
   * uws: Bind to host from init params

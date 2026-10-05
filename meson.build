@@ -1,5 +1,5 @@
 project('tll-ws', 'c', 'cpp'
-  , version: '0.4.1'
+  , version: '0.5.0'
   , default_options: ['cpp_std=c++17', 'c_std=c11', 'werror=true', 'optimization=2', 'b_lto=true']
   )
 
