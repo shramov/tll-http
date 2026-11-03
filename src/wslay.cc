@@ -26,11 +26,13 @@ class WSLay : public tll::channel::Prefix<WSLay>
 
 	struct wslay_event_context * _client = nullptr;
 	std::string_view _buf;
+	unsigned _messages = 0;
 
 	std::string _host, _path, _path_suffix, _hostname;
 	tll::duration _ping_interval = 3s;
 	std::chrono::time_point<std::chrono::steady_clock> _ping_ts = {};
 	bool _report_ping = false;
+	bool _report_eod = false;
 
 	using Headers = std::map<std::string, std::string>;
 	Headers _headers;
@@ -114,6 +116,7 @@ int WSLay::_init(const tll::Channel::Url &url, tll::Channel *master)
 	_hostname = reader.getT("hostname", std::string{});
 	_ping_interval = reader.getT<tll::duration>("ping", 3s);
 	_report_ping = reader.getT("report-ping", false);
+	_report_eod = reader.getT("end-of-data", false);
 	_ws_op = reader.getT("binary", true) ? WSLAY_BINARY_FRAME : WSLAY_TEXT_FRAME;
 	if (!reader)
 		return _log.fail(EINVAL, "Invalid url: {}", reader.error());
@@ -242,6 +245,7 @@ void WSLay::_on_ws_message(const wslay_event_on_msg_recv_arg *arg)
 	switch (arg->opcode) {
 	case WSLAY_BINARY_FRAME:
 	case WSLAY_TEXT_FRAME:
+		_messages++;
 		_msg.data = arg->msg;
 		_msg.size = arg->msg_length;
 		_callback_data(&_msg);
@@ -398,10 +402,15 @@ int WSLay::_on_recv_buf(std::string_view data)
 	if (data.empty())
 		return 0;
 	_buf = data;
+	_messages = 0;
 	auto r = wslay_event_recv(_client);
 	_buf = {};
 	if (r)
 		return _log.fail(EINVAL, "wslay_event_recv failed: {}", r);
+	if (_report_eod && _messages) {
+		tll_msg_t m = { .type = TLL_MESSAGE_CONTROL, .msgid = uwsc_scheme::EndOfData::meta_id() };
+		_callback(&m);
+	}
 	// wslay_event_want_write performs same check as in the loop of wslay_event_send
 	if (auto r = wslay_event_send(_client); r)
 		return state_fail(EINVAL, "wslay_event_send failed: {}", r);

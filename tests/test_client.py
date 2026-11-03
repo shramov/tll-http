@@ -182,14 +182,16 @@ async def test_ping_interval(asyncloop, port):
     assert (m.type, m.msgid) == (m.Type.Control, client.scheme_control['Pong'].msgid)
 
 class Echo:
-    def __init__(self):
+    def __init__(self, count: int = 1):
+        self.count = count
         self.headers = {}
         self.request = asyncio.get_running_loop().create_future()
 
     async def __call__(self, sock):
         self.request.set_result(getattr(sock, 'request', None))
         async for message in sock:
-            await sock.send(message)
+            for _ in range(self.count):
+                await sock.send(message)
 
 @asyncloop_run
 async def test_python(asyncloop, wsserve, client, port):
@@ -223,5 +225,35 @@ async def test_python(asyncloop, wsserve, client, port):
 
             m = await client.recv(0.1)
             assert m.data.tobytes() == b'yyy'
+        finally:
+            client.close()
+
+@asyncloop_run
+async def test_eod(asyncloop, wsserve, port):
+    if not asyncloop.context.has_impl("wslay+"):
+        pytest.skip("uwsc does not support EndOfData")
+
+    client = asyncloop.Channel(f'ws://127.0.0.1:{port}/path;end-of-data=yes', name='client', dump='yes')
+
+    echo = Echo(count=5)
+    async with wsserve(echo, '*', port):
+        try:
+            client.open()
+
+            assert await client.recv_state() == client.State.Active
+            assert client.state == client.State.Active
+
+            req = await asyncio.wait_for(echo.request, 0.1)
+
+            for body in [b'xxx', b'yyy']:
+                client.post(body)
+
+                for _ in range(echo.count):
+                    m = await client.recv(0.1)
+                    assert m.data.tobytes() == body
+
+                m = await client.recv(0.1)
+
+                assert (m.type, m.msgid) == (m.Type.Control, client.scheme_control['EndOfData'].msgid)
         finally:
             client.close()

@@ -7,3 +7,6 @@
   id: 0xA
   fields:
     - { name: rtt, type: uint32, options: { type: duration, resolution: ns }}
+
+- name: EndOfData
+  id: 60
