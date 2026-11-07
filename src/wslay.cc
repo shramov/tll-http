@@ -82,6 +82,8 @@ private:
 	int _on_recv_buf(std::string_view);
 	int _on_timer(const tll::Channel *, const tll_msg_t *)
 	{
+		if (state() != tll::state::Active)
+			return 0;
 		_ping_ts = std::chrono::steady_clock::now();
 		wslay_event_msg frame = { .opcode = WSLAY_PING };
 		if (auto r = wslay_event_queue_msg(_client, &frame); r)
